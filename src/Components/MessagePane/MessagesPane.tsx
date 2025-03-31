@@ -8,6 +8,7 @@ import { useIssueStore } from "../../Store/issueStore";
 import { useEffect } from "react";
 import { useUsersStore } from "../../Store/userStore";
 import { GITHUB_API_URL } from "../../Config";
+import { Box, CircularProgress } from "@mui/joy";
 
 type User = {
   login: string;
@@ -54,6 +55,7 @@ export default function MessagesPane() {
   // J'ajoute l'auteur de l'issue et j'incrémente son compteur
   useEffect(() => {
     if (issue.data) {
+      console.log(issue.data , "issue.data");
       const { login, avatar_url } = issue.data.user;
       addUser(login, avatar_url);
       incrementMessageCount(login);
@@ -80,71 +82,114 @@ export default function MessagesPane() {
         backgroundColor: "background.level1",
       }}
     >
-      {issue.data && (
-        <Stack
-          direction="column"
-          justifyContent="space-between"
+      {/* Affichage d'un message d'erreur si l'issue n'existe pas */}
+      {issue.isError && (
+        <Box
           sx={{
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            backgroundColor: "background.body",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            p: 4,
           }}
-          py={{ xs: 2, md: 2 }}
-          px={{ xs: 1, md: 2 }}
         >
-          <Typography
-            fontWeight="lg"
-            fontSize="lg"
-            component="h2"
-            noWrap
-            endDecorator={
-              <Chip
-                variant="outlined"
-                size="sm"
-                color="neutral"
-                sx={{
-                  borderRadius: "sm",
-                }}
-              >
-                #{issue.data?.number}
-              </Chip>
-            }
-          >
-            {issue.data.title}
+          <Typography level="h4" color="danger" sx={{ mb: 2 }}>
+            Issue introuvable
           </Typography>
-          <Typography level="body-sm">{issue.data.user.login}</Typography>
-        </Stack>
+          <Typography level="body-md" textAlign="center" sx={{ color: 'text.secondary' }}>
+            L'issue spécifiée n'existe pas ou n'est pas accessible.
+            Veuillez vérifier l'URL et réessayer.
+          </Typography>
+        </Box>
       )}
-      {comments.data && (
-        <Stack spacing={2} justifyContent="flex-end" px={2} py={3}>
-          {/* J'affiche l'issue seulement si son auteur n'est pas filtré */}
-          {issue.data && !isUserHidden(issue.data.user.login) && (
-            <ChatBubble variant="solid" {...issue.data} />
-          )}
 
-          {/* Ici j'affiche les messages des utilisateurs selon si ils sont séléctionnés */}
-          {comments.data
-            .filter(comment => !isUserHidden(comment.user.login))
-            .map((comment) => (
-              <ChatBubble
-                key={comment.id}
-                variant={comment.user.login === issue.data!.user.login ? "solid" : "outlined"}
-                {...comment}
-              />
-            ))}
-
-          {/* J'affiche ce message si tous les utilisateurs sont masqués */}
-          {((issue.data && isUserHidden(issue.data.user.login)) || !issue.data) &&
-           (comments.data.length === 0 || comments.data.every(comment => isUserHidden(comment.user.login))) && (
-            <Typography
-              level="body-lg"
-              textAlign="center"
-              sx={{ py: 4, color: 'text.tertiary' }}
+      {/* Contenu normal quand l'issue existe */}
+      {!issue.isError && (
+        <>
+          {issue.data && (
+            <Stack
+              direction="column"
+              justifyContent="space-between"
+              sx={{
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.body",
+              }}
+              py={{ xs: 2, md: 2 }}
+              px={{ xs: 1, md: 2 }}
             >
-              Aucun message à afficher avec les filtres actuels
-            </Typography>
+              <Typography
+                fontWeight="lg"
+                fontSize="lg"
+                component="h2"
+                noWrap
+                endDecorator={
+                  <Chip
+                    variant="outlined"
+                    size="sm"
+                    color="neutral"
+                    sx={{
+                      borderRadius: "sm",
+                    }}
+                  >
+                    #{issue.data?.number}
+                  </Chip>
+                }
+              >
+                {issue.data.title}
+              </Typography>
+              <Typography level="body-sm">{issue.data.user.login}</Typography>
+            </Stack>
           )}
-        </Stack>
+
+          {/* J'affiche un spinner pendant le chargement */}
+          {(issue.isLoading || comments.isLoading) && (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                height: "100%",
+                p: 4,
+              }}
+            >
+              <CircularProgress />
+            </Box>
+          )}
+
+          {comments.data && (
+            <Stack spacing={2} justifyContent="flex-end" px={2} py={3}>
+              {/* J'affiche l'issue seulement si son auteur n'est pas filtré */}
+              {issue.data && !isUserHidden(issue.data.user.login) && (
+                <ChatBubble variant="solid" {...issue.data} />
+              )}
+
+              {/* Ici j'affiche les messages des utilisateurs selon si ils sont séléctionnés */}
+              {comments.data
+                .filter(comment => !isUserHidden(comment.user.login))
+                .map((comment) => (
+                  <ChatBubble
+                    key={comment.id}
+                    variant={comment.user.login === issue.data!.user.login ? "solid" : "outlined"}
+                    {...comment}
+                  />
+                ))}
+
+              {/* J'affiche ce message si tous les utilisateurs sont masqués */}
+              {((issue.data && isUserHidden(issue.data.user.login)) || !issue.data) &&
+               (comments.data.length === 0 || comments.data.every(comment => isUserHidden(comment.user.login))) && (
+                <Typography
+                  level="body-lg"
+                  textAlign="center"
+                  sx={{ py: 4, color: 'text.tertiary' }}
+                >
+                  Aucun message à afficher avec les filtres actuels
+                </Typography>
+              )}
+            </Stack>
+          )}
+        </>
       )}
     </Sheet>
   );
