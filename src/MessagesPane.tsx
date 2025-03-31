@@ -4,8 +4,9 @@ import Stack from "@mui/joy/Stack";
 import Typography from "@mui/joy/Typography";
 import ChatBubble from "./ChatBubble";
 import useFetch from "./useFetch";
-import { useIssueStore } from "./Context/issueStore";
-
+import { useIssueStore } from "./Store/issueStore";
+import { useEffect } from "react";
+import { useUsersStore } from "./Store/userStore";
 
 type User = {
   login: string;
@@ -33,15 +34,39 @@ type Comment = {
 
 export default function MessagesPane() {
   const { issueUrl } = useIssueStore();
+  const { addUser, incrementMessageCount, resetUsers } = useUsersStore();
 
   const issue = useFetch<Issue>({
-    url: `https://api.github.com/repos/${issueUrl}`
+    url: `https://api.github.com/repos/${issueUrl}`,
   });
 
-  const comments = useFetch<Comment[]>(
-    { url: issue.data?.comments_url },
-    { enabled: issue.isFetched }
-  );
+  const comments = useFetch<Comment[]>({ url: issue.data?.comments_url }, { enabled: issue.isFetched });
+
+  // Cela permet de réinitialiser la liste des utilisateurs lorsque l'issue change
+  useEffect(() => {
+    resetUsers();
+  }, [issueUrl, resetUsers]);
+
+  // Ici j'ajoute l'auteur de l'issue et j'incrémente son compteur
+  useEffect(() => {
+    if (issue.data) {
+      const { login, avatar_url } = issue.data.user;
+      addUser(login, avatar_url);
+      incrementMessageCount(login);
+    }
+  }, [issue.data, addUser, incrementMessageCount]);
+
+  // Ici j'ajoute les auteurs des commentaires et j'incrémente leurs compteurs
+  useEffect(() => {
+    if (comments.data) {
+      comments.data.forEach((comment) => {
+        const { login, avatar_url } = comment.user;
+        addUser(login, avatar_url);
+        incrementMessageCount(login);
+      });
+    }
+  }, [comments.data, addUser, incrementMessageCount]);
+
 
   return (
     <Sheet
