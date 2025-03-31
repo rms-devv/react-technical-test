@@ -5,34 +5,32 @@ import Typography from "@mui/joy/Typography";
 import ChatBubble from "../ChatBubble/ChatBubble";
 import useFetch from "../../useFetch";
 import { useIssueStore } from "../../Store/issueStore";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { useUsersStore } from "../../Store/userStore";
-import { GITHUB_API_URL } from "../../Config";
+import { GITHUB_API_URL } from "../../config";
 import { Box, CircularProgress } from "@mui/joy";
+import TimelineEvent from "./Timeline/TimeLineEvent";
+import { Issue } from "../../../types/Issue";
+import { Comment } from "../../../types/Comment";
+import { User } from "../../../types/User";
 
-type User = {
-  login: string;
-  avatar_url: string;
-};
-
-type Issue = {
+type TimelineEventType = {
   id: number;
+  event: string;
+  actor: User;
   created_at: string;
-  user: User;
-
-  number: number;
-  title: string;
-  body: string;
-  comments_url: string;
+  label?: {
+    name: string;
+    color: string;
+  };
+  state?: string;
 };
 
-type Comment = {
-  id: number;
-  created_at: string;
-  user: User;
-
-  body: string;
-};
+// Type pour représenter un élément combiné (soit issue, commentaire ou événement)
+type CombinedItem =
+  | { type: 'issue'; data: Issue; created_at: string }
+  | { type: 'comment'; data: Comment; created_at: string }
+  | { type: 'timeline'; data: TimelineEventType; created_at: string };
 
 export default function MessagesPane() {
   const { issueUrl } = useIssueStore();
@@ -46,6 +44,54 @@ export default function MessagesPane() {
     { url: issue.data?.comments_url },
     { enabled: issue.isFetched }
   );
+
+  const timeline = useFetch<TimelineEventType[]>(
+    { url: `${GITHUB_API_URL}/${issueUrl}/timeline` },
+  );
+
+// J'utilise useMemo ici pour éviter de recalculer cette liste à chaque rendu
+const combinedItems = React.useMemo<CombinedItem[]>(() => {
+  const items: CombinedItem[] = [];
+
+  // j'ajoute l'issue initiale
+  if (issue.data) {
+    items.push({
+      type: 'issue',
+      data: issue.data,
+      created_at: issue.data.created_at
+    });
+  }
+
+  // j'ajoute les commentaires
+  if (comments.data) {
+    comments.data.forEach(comment => {
+      items.push({
+        type: 'comment',
+        data: comment,
+        created_at: comment.created_at
+      });
+    });
+  }
+
+  // j'ajoute les événements de timeline
+  // Je les ajoute pour répondre à la consigne 5 qui demande d'ajouter les événements
+  // comme les labels, changements de statut, etc
+  if (timeline.data) {
+    timeline.data.forEach(event => {
+      items.push({
+        type: 'timeline',
+        data: event,
+        created_at: event.created_at
+      });
+    });
+  }
+
+  // Je trie tous les éléments par date pour respecter la date de publication
+  return items.sort((a, b) =>
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+ }, [issue.data, comments.data, timeline.data]);
+
 
   // Je réinitialise les utilisateurs quand on change d'issue
   useEffect(() => {
@@ -72,6 +118,38 @@ export default function MessagesPane() {
       });
     }
   }, [comments.data, addUser, incrementMessageCount]);
+
+  // Fonction pour rendre chaque élément selon son type
+  const renderItem = (item: CombinedItem, index: number) => {
+    switch(item.type) {
+      case 'issue':
+        return <ChatBubble key={`issue-${item.data.id}`} variant="solid" {...item.data} />;
+
+      case 'comment':
+        return (
+          <ChatBubble
+            key={`comment-${item.data.id}`}
+            variant={item.data.user.login === issue.data?.user.login ? "solid" : "outlined"}
+            {...item.data}
+          />
+        );
+
+      case 'timeline':
+        return (
+          <TimelineEvent
+            key={`timeline-${item.data.id}-${index}`}
+            event={item.data.event}
+            actor={item.data.actor}
+            created_at={item.data.created_at}
+            label={item.data.label}
+            state={item.data.state}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <Sheet
@@ -144,7 +222,7 @@ export default function MessagesPane() {
           )}
 
           {/* J'affiche un spinner pendant le chargement */}
-          {(issue.isLoading || comments.isLoading) && (
+          {(issue.isLoading || comments.isLoading || timeline.isLoading) && (
             <Box
               sx={{
                 display: "flex",
@@ -158,27 +236,25 @@ export default function MessagesPane() {
             </Box>
           )}
 
-          {comments.data && (
+          {(issue.data || comments.data) && (
             <Stack spacing={2} justifyContent="flex-end" px={2} py={3}>
-              {/* J'affiche l'issue seulement si son auteur n'est pas filtré */}
-              {issue.data && !isUserHidden(issue.data.user.login) && (
-                <ChatBubble variant="solid" {...issue.data} />
-              )}
+              {/* Liste combinée des commentaires et événements */}
+              {combinedItems
+                .filter(item => {
+                  // Je filtre selon la visibilité des utilisateurs
+                  if (item.type === 'issue' || item.type === 'comment') {
+                    return !isUserHidden(item.data.user.login);
+                  }
+                  return true;
+                })
+                .map((item, index) => renderItem(item, index))}
 
-              {/* Ici j'affiche les messages des utilisateurs selon si ils sont séléctionnés */}
-              {comments.data
-                .filter(comment => !isUserHidden(comment.user.login))
-                .map((comment) => (
-                  <ChatBubble
-                    key={comment.id}
-                    variant={comment.user.login === issue.data!.user.login ? "solid" : "outlined"}
-                    {...comment}
-                  />
-                ))}
-
-              {/* J'affiche ce message si tous les utilisateurs sont masqués */}
-              {((issue.data && isUserHidden(issue.data.user.login)) || !issue.data) &&
-               (comments.data.length === 0 || comments.data.every(comment => isUserHidden(comment.user.login))) && (
+              {/* J'affiche ce message si tous les utilisateurs sont masqués dans le filtre */}
+              {combinedItems.length === 0 ||
+               (combinedItems.every(item =>
+                  (item.type === 'issue' || item.type === 'comment') &&
+                  isUserHidden(item.data.user.login)
+               )) && (
                 <Typography
                   level="body-lg"
                   textAlign="center"
