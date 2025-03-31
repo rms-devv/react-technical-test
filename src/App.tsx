@@ -1,8 +1,8 @@
 import Box from "@mui/joy/Box";
 import CssBaseline from "@mui/joy/CssBaseline";
 import { CssVarsProvider } from "@mui/joy/styles";
-import MessagesPane from "./MessagesPane";
-import Sidebar from "./Sidebar";
+import MessagesPane from "./Components/MessagePane/MessagesPane";
+import Sidebar from "./Components/Sidebar/Sidebar";
 
 function App() {
   return (
